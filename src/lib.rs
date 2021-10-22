@@ -55,7 +55,7 @@ pub fn ahash_seq(x: EntryList) -> u64 {
 }
 
 pub fn ahash_par(x: EntryList) -> u64 {
-    // Same as above, but parallel
+    // Same as above, but parallelizable
     let mut hashes = x
         .into_par_iter()
         .map(|e| {
@@ -64,7 +64,7 @@ pub fn ahash_par(x: EntryList) -> u64 {
             hasher.finish()
         })
         .collect::<Vec<_>>();
-    hashes.par_sort_unstable();
+    hashes.sort_unstable(); // par_sort tested, not worthwhile for hashes
 
     // ...however, the final hashing must be sequential, and that's sad
     hashes
@@ -107,7 +107,7 @@ pub fn eq_by_ahash_par(x: EntryList, y: EntryList) -> bool {
                 hasher.finish()
             })
             .collect::<Vec<_>>();
-        hashes.par_sort_unstable();
+        hashes.sort_unstable(); // par_sort tested, not worthwhile for hashes
         hashes
     };
     sorted_hashes(x) == sorted_hashes(y) // par_eq tested, but not beneficial for 1k hashes
@@ -133,12 +133,12 @@ pub fn sha256_seq(x: EntryList) -> Output<Sha256> {
 }
 
 pub fn sha256_par(x: EntryList) -> Output<Sha256> {
-    // Same as above, but parallel
+    // Same as above, but parallelizable
     let mut hashes = x
         .into_par_iter()
         .map(|e| Sha256::digest(&e[..]))
         .collect::<Vec<_>>();
-    hashes.par_sort_unstable();
+    hashes.sort_unstable(); // par_sort tested, not worthwhile for hashes
 
     // ...however, the final hashing must be sequential, and that's sad
     hashes
@@ -170,7 +170,7 @@ pub fn eq_by_sha256_par(x: EntryList, y: EntryList) -> bool {
             .into_par_iter()
             .map(|e| Sha256::digest(&e[..]))
             .collect::<Vec<_>>();
-        hashes.par_sort_unstable();
+        hashes.sort_unstable(); // par_sort tested, not worthwhile for hashes
         hashes
     };
     sorted_hashes(x) == sorted_hashes(y) // par_eq tested, but not beneficial for 1k hashes
@@ -199,12 +199,12 @@ pub fn blake3_seq(x: EntryList) -> blake3::Hash {
 }
 
 pub fn blake3_par(x: EntryList) -> blake3::Hash {
-    // Same as above, but parallel
+    // Same as above, but parallelizable
     let mut hashes = x
         .into_par_iter()
         .map(|e| blake3::hash(&e[..]))
         .collect::<Vec<_>>();
-    hashes.par_sort_unstable_by_key(|hash| *hash.as_bytes());
+    hashes.sort_unstable_by_key(|hash| *hash.as_bytes()); // par_sort tested, not worthwhile for hashes
 
     // ...however, the final hashing must be sequential, and that's sad
     hashes
@@ -239,7 +239,7 @@ pub fn eq_by_blake3_par(x: EntryList, y: EntryList) -> bool {
             .into_par_iter()
             .map(|e| blake3::hash(&e[..]))
             .collect::<Vec<_>>();
-        hashes.par_sort_unstable_by_key(|hash| *hash.as_bytes());
+        hashes.sort_unstable_by_key(|hash| *hash.as_bytes()); // par_sort tested, not worthwhile for hashes
         hashes
     };
     sorted_hashes(x) == sorted_hashes(y) // par_eq tested, but not beneficial for 1k hashes
