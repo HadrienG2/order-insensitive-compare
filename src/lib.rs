@@ -110,7 +110,7 @@ pub fn eq_by_ahash_par(x: EntryList, y: EntryList) -> bool {
         hashes.par_sort_unstable();
         hashes
     };
-    par_eq(sorted_hashes(x), sorted_hashes(y))
+    sorted_hashes(x) == sorted_hashes(y) // par_eq tested, but not beneficial for 1k hashes
 }
 
 // ===
@@ -173,7 +173,7 @@ pub fn eq_by_sha256_par(x: EntryList, y: EntryList) -> bool {
         hashes.par_sort_unstable();
         hashes
     };
-    par_eq(sorted_hashes(x), sorted_hashes(y))
+    sorted_hashes(x) == sorted_hashes(y) // par_eq tested, but not beneficial for 1k hashes
 }
 
 // ===
@@ -242,7 +242,7 @@ pub fn eq_by_blake3_par(x: EntryList, y: EntryList) -> bool {
         hashes.par_sort_unstable_by_key(|hash| *hash.as_bytes());
         hashes
     };
-    par_eq(sorted_hashes(x), sorted_hashes(y))
+    sorted_hashes(x) == sorted_hashes(y) // par_eq tested, but not beneficial for 1k hashes
 }
 
 // ===
