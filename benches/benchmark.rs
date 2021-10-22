@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use order_insensitive_compare::{
-    eq_by_hashing_par, eq_by_hashing_seq, eq_by_sorting_par, eq_by_sorting_seq, hash_par, hash_seq,
+    ahash_par, ahash_seq, eq_by_ahash_par, eq_by_ahash_seq, eq_by_sha256_par, eq_by_sha256_seq,
+    eq_by_sorting_par, eq_by_sorting_seq, sha256_par, sha256_seq,
 };
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -16,18 +17,34 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         rng.fill_bytes(&mut entry[..]);
     });
 
-    c.bench_function("seq hashing", |b| {
+    c.bench_function("seq ahash", |b| {
         b.iter_batched(
             || data.clone(),
-            |data| hash_seq(data),
+            |data| ahash_seq(data),
             criterion::BatchSize::LargeInput,
         );
     });
 
-    c.bench_function("par hashing", |b| {
+    c.bench_function("seq sha256", |b| {
         b.iter_batched(
             || data.clone(),
-            |data| hash_par(data),
+            |data| sha256_seq(data),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("par ahash", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |data| ahash_par(data),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("par sha256", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |data| sha256_par(data),
             criterion::BatchSize::LargeInput,
         );
     });
@@ -44,10 +61,18 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         );
     });
 
-    c.bench_function("seq compare via hashing", |b| {
+    c.bench_function("seq compare via ahash", |b| {
         b.iter_batched(
             || (data.clone(), shuffled.clone()),
-            |(data, shuffled)| eq_by_hashing_seq(data, shuffled),
+            |(data, shuffled)| eq_by_ahash_seq(data, shuffled),
+            BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("seq compare via sha256", |b| {
+        b.iter_batched(
+            || (data.clone(), shuffled.clone()),
+            |(data, shuffled)| eq_by_sha256_seq(data, shuffled),
             BatchSize::LargeInput,
         );
     });
@@ -60,10 +85,18 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         );
     });
 
-    c.bench_function("par compare via hashing", |b| {
+    c.bench_function("par compare via ahash", |b| {
         b.iter_batched(
             || (data.clone(), shuffled.clone()),
-            |(data, shuffled)| eq_by_hashing_par(data, shuffled),
+            |(data, shuffled)| eq_by_ahash_par(data, shuffled),
+            BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("par compare via sha256", |b| {
+        b.iter_batched(
+            || (data.clone(), shuffled.clone()),
+            |(data, shuffled)| eq_by_sha256_par(data, shuffled),
             BatchSize::LargeInput,
         );
     });

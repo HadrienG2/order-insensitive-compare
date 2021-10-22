@@ -1,5 +1,6 @@
 [package]
 name = "order-insensitive-compare"
+rust_version = "1.56.0"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,6 +9,7 @@ edition = "2021"
 [dependencies]
 ahash = "0.7"
 rayon = "1.5"
+sha2 = "0.9"
 
 [dev-dependencies]
 criterion = "0.3"

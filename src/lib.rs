@@ -1,5 +1,6 @@
 use ahash::AHasher;
 use rayon::prelude::*;
+use sha2::{digest::Output, Digest, Sha256};
 use std::{
     collections::{BTreeSet, HashSet},
     hash::Hasher,
@@ -7,7 +8,8 @@ use std::{
 
 type Entry = Vec<u8>;
 type EntryList = Vec<Entry>;
-type Hash = u64;
+
+// ===
 
 pub fn eq_by_sorting_seq(mut x: EntryList, mut y: EntryList) -> bool {
     x.sort_unstable();
@@ -21,7 +23,9 @@ pub fn eq_by_sorting_par(mut x: EntryList, mut y: EntryList) -> bool {
     x == y
 }
 
-pub fn hash_seq(x: EntryList) -> Hash {
+// ===
+
+pub fn ahash_seq(x: EntryList) -> u64 {
     // Hash individual entries
     let sorted_hashes = x
         .into_iter()
@@ -42,7 +46,7 @@ pub fn hash_seq(x: EntryList) -> Hash {
         .finish()
 }
 
-pub fn hash_par(x: EntryList) -> Hash {
+pub fn ahash_par(x: EntryList) -> u64 {
     // Same as above, but parallel
     let sorted_hashes = x
         .into_par_iter()
@@ -63,8 +67,10 @@ pub fn hash_par(x: EntryList) -> Hash {
         .finish()
 }
 
+// ---
+
 // If we know that we want to compare for equality, we can do it...
-pub fn eq_by_hashing_seq(x: EntryList, y: EntryList) -> bool {
+pub fn eq_by_ahash_seq(x: EntryList, y: EntryList) -> bool {
     let make_hash_set = |list: EntryList| {
         list.into_iter()
             .map(|e| {
@@ -77,8 +83,9 @@ pub fn eq_by_hashing_seq(x: EntryList, y: EntryList) -> bool {
     make_hash_set(x) == make_hash_set(y)
 }
 
-// ...and it will parallelize a bit better
-pub fn eq_by_hashing_par(x: EntryList, y: EntryList) -> bool {
+// ...and then there is no hashing at the end, only a comparison, which is still
+// sequential but that's reasonable since it's memory bound anyway.
+pub fn eq_by_ahash_par(x: EntryList, y: EntryList) -> bool {
     let make_hash_set = |list: EntryList| {
         list.into_par_iter()
             .map(|e| {
@@ -90,6 +97,61 @@ pub fn eq_by_hashing_par(x: EntryList, y: EntryList) -> bool {
     };
     make_hash_set(x) == make_hash_set(y)
 }
+
+// ===
+
+pub fn sha256_seq(x: EntryList) -> Output<Sha256> {
+    // Hash individual entries
+    let sorted_hashes = x
+        .into_iter()
+        .map(|e| Sha256::digest(&e[..]))
+        .collect::<BTreeSet<_>>();
+
+    // Hash the sorted hash list
+    sorted_hashes
+        .into_iter()
+        .fold(Sha256::new(), |hasher, elem| hasher.chain(elem.as_slice()))
+        .finalize()
+}
+
+pub fn sha256_par(x: EntryList) -> Output<Sha256> {
+    // Same as above, but parallel
+    let sorted_hashes = x
+        .into_par_iter()
+        .map(|e| Sha256::digest(&e[..]))
+        .collect::<BTreeSet<_>>();
+
+    // ...however, the final hashing must be sequential, and that's sad
+    sorted_hashes
+        .into_iter()
+        .fold(Sha256::new(), |hasher, elem| hasher.chain(elem.as_slice()))
+        .finalize()
+}
+
+// ---
+
+// If we know that we want to compare for equality, we can do it...
+pub fn eq_by_sha256_seq(x: EntryList, y: EntryList) -> bool {
+    let make_hash_set = |list: EntryList| {
+        list.into_iter()
+            .map(|e| Sha256::digest(&e[..]))
+            .collect::<HashSet<_>>()
+    };
+    make_hash_set(x) == make_hash_set(y)
+}
+
+// ...and then there is no hashing at the end, only a comparison, which is still
+// sequential but that's reasonable since it's memory bound anyway.
+pub fn eq_by_sha256_par(x: EntryList, y: EntryList) -> bool {
+    let make_hash_set = |list: EntryList| {
+        list.into_par_iter()
+            .map(|e| Sha256::digest(&e[..]))
+            .collect::<HashSet<_>>()
+    };
+    make_hash_set(x) == make_hash_set(y)
+}
+
+// ===
 
 #[cfg(test)]
 mod tests {
@@ -105,37 +167,57 @@ mod tests {
     }
 
     #[quickcheck]
-    fn same_eq_by_sorting_seq(data: EntryList) {
+    fn same_eq_sorting_seq(data: EntryList) {
         same_eq(data, eq_by_sorting_seq);
     }
 
     #[quickcheck]
-    fn same_eq_by_sorting_par(data: EntryList) {
+    fn same_eq_sorting_par(data: EntryList) {
         same_eq(data, eq_by_sorting_par);
     }
 
     #[quickcheck]
-    fn same_eq_by_hashing_seq(data: EntryList) {
-        same_eq(data, eq_by_hashing_seq);
+    fn same_eq_ahash_seq(data: EntryList) {
+        same_eq(data, eq_by_ahash_seq);
     }
 
     #[quickcheck]
-    fn same_eq_by_hashing_par(data: EntryList) {
-        same_eq(data, eq_by_hashing_par);
+    fn same_eq_ahash_par(data: EntryList) {
+        same_eq(data, eq_by_ahash_par);
     }
 
-    fn same_hash(data: EntryList, mut hash: impl FnMut(EntryList) -> Hash) {
+    #[quickcheck]
+    fn same_eq_sha256_seq(data: EntryList) {
+        same_eq(data, eq_by_sha256_seq);
+    }
+
+    #[quickcheck]
+    fn same_eq_sha256_par(data: EntryList) {
+        same_eq(data, eq_by_sha256_par);
+    }
+
+    fn same_hash<O: Eq>(data: EntryList, mut hash: impl FnMut(EntryList) -> O) {
         same_eq(data, |x, y| hash(x) == hash(y))
     }
 
     #[quickcheck]
-    fn same_hash_seq(data: EntryList) {
-        same_hash(data, hash_seq);
+    fn same_ahash_seq(data: EntryList) {
+        same_hash(data, ahash_seq);
     }
 
     #[quickcheck]
-    fn same_hash_par(data: EntryList) {
-        same_hash(data, hash_par);
+    fn same_ahash_par(data: EntryList) {
+        same_hash(data, ahash_par);
+    }
+
+    #[quickcheck]
+    fn same_sha256_seq(data: EntryList) {
+        same_hash(data, sha256_seq);
+    }
+
+    #[quickcheck]
+    fn same_sha256_par(data: EntryList) {
+        same_hash(data, sha256_par);
     }
 
     fn pair_eq(x: EntryList, y: EntryList, tested_eq: impl FnOnce(EntryList, EntryList) -> bool) {
@@ -148,16 +230,26 @@ mod tests {
     }
 
     #[quickcheck]
-    fn pair_eq_hashing_seq(x: EntryList, y: EntryList) {
-        pair_eq(x, y, eq_by_hashing_seq)
+    fn pair_eq_ahash_seq(x: EntryList, y: EntryList) {
+        pair_eq(x, y, eq_by_ahash_seq)
     }
 
     #[quickcheck]
-    fn pair_eq_hashing_par(x: EntryList, y: EntryList) {
-        pair_eq(x, y, eq_by_hashing_par)
+    fn pair_eq_ahash_par(x: EntryList, y: EntryList) {
+        pair_eq(x, y, eq_by_ahash_par)
     }
 
-    fn pair_hash(x: EntryList, y: EntryList, mut tested_hash: impl FnMut(EntryList) -> Hash) {
+    #[quickcheck]
+    fn pair_eq_sha256_seq(x: EntryList, y: EntryList) {
+        pair_eq(x, y, eq_by_sha256_seq)
+    }
+
+    #[quickcheck]
+    fn pair_eq_sha256_par(x: EntryList, y: EntryList) {
+        pair_eq(x, y, eq_by_sha256_par)
+    }
+
+    fn pair_hash<O: Eq>(x: EntryList, y: EntryList, mut tested_hash: impl FnMut(EntryList) -> O) {
         assert_eq!(
             eq_by_sorting_seq(x.clone(), y.clone()),
             tested_hash(x) == tested_hash(y)
@@ -165,12 +257,22 @@ mod tests {
     }
 
     #[quickcheck]
-    fn pair_hash_seq(x: EntryList, y: EntryList) {
-        pair_hash(x, y, hash_seq)
+    fn pair_ahash_seq(x: EntryList, y: EntryList) {
+        pair_hash(x, y, ahash_seq)
     }
 
     #[quickcheck]
-    fn pair_hash_par(x: EntryList, y: EntryList) {
-        pair_hash(x, y, hash_par)
+    fn pair_ahash_par(x: EntryList, y: EntryList) {
+        pair_hash(x, y, ahash_par)
+    }
+
+    #[quickcheck]
+    fn pair_sha256_seq(x: EntryList, y: EntryList) {
+        pair_hash(x, y, sha256_seq)
+    }
+
+    #[quickcheck]
+    fn pair_sha256_par(x: EntryList, y: EntryList) {
+        pair_hash(x, y, sha256_par)
     }
 }
