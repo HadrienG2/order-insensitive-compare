@@ -1,7 +1,8 @@
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use order_insensitive_compare::{
-    ahash_par, ahash_seq, eq_by_ahash_par, eq_by_ahash_seq, eq_by_sha256_par, eq_by_sha256_seq,
-    eq_by_sorting_par, eq_by_sorting_seq, sha256_par, sha256_seq,
+    ahash_par, ahash_seq, blake3_par, blake3_seq, eq_by_ahash_par, eq_by_ahash_seq,
+    eq_by_blake3_par, eq_by_blake3_seq, eq_by_sha256_par, eq_by_sha256_seq, eq_by_sorting_par,
+    eq_by_sorting_seq, sha256_par, sha256_seq,
 };
 use rand::prelude::*;
 use rayon::prelude::*;
@@ -33,6 +34,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         );
     });
 
+    c.bench_function("seq blake3", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |data| blake3_seq(data),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+
     c.bench_function("par ahash", |b| {
         b.iter_batched(
             || data.clone(),
@@ -45,6 +54,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter_batched(
             || data.clone(),
             |data| sha256_par(data),
+            criterion::BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("par blake3", |b| {
+        b.iter_batched(
+            || data.clone(),
+            |data| blake3_par(data),
             criterion::BatchSize::LargeInput,
         );
     });
@@ -77,6 +94,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         );
     });
 
+    c.bench_function("seq compare via blake3", |b| {
+        b.iter_batched(
+            || (data.clone(), shuffled.clone()),
+            |(data, shuffled)| eq_by_blake3_seq(data, shuffled),
+            BatchSize::LargeInput,
+        );
+    });
+
     c.bench_function("par compare via sorting", |b| {
         b.iter_batched(
             || (data.clone(), shuffled.clone()),
@@ -97,6 +122,14 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         b.iter_batched(
             || (data.clone(), shuffled.clone()),
             |(data, shuffled)| eq_by_sha256_par(data, shuffled),
+            BatchSize::LargeInput,
+        );
+    });
+
+    c.bench_function("par compare via blake3", |b| {
+        b.iter_batched(
+            || (data.clone(), shuffled.clone()),
+            |(data, shuffled)| eq_by_blake3_par(data, shuffled),
             BatchSize::LargeInput,
         );
     });
