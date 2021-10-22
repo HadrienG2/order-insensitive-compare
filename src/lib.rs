@@ -1,10 +1,7 @@
 use ahash::AHasher;
 use rayon::prelude::*;
 use sha2::{digest::Output, Digest, Sha256};
-use std::{
-    collections::{BTreeSet, HashSet},
-    hash::Hasher,
-};
+use std::hash::Hasher;
 
 type Entry = Vec<u8>;
 type EntryList = Vec<Entry>;
@@ -27,17 +24,20 @@ pub fn eq_by_sorting_par(mut x: EntryList, mut y: EntryList) -> bool {
 
 pub fn ahash_seq(x: EntryList) -> u64 {
     // Hash individual entries
-    let sorted_hashes = x
+    let mut hashes = x
         .into_iter()
         .map(|e| {
             let mut hasher = AHasher::default();
             hasher.write(&e[..]);
             hasher.finish()
         })
-        .collect::<BTreeSet<_>>();
+        .collect::<Vec<_>>();
+
+    // Sort the hashes
+    hashes.sort_unstable();
 
     // Hash the sorted hash list
-    sorted_hashes
+    hashes
         .into_iter()
         .fold(AHasher::default(), |mut hasher, elem| {
             hasher.write_u64(elem);
@@ -48,17 +48,18 @@ pub fn ahash_seq(x: EntryList) -> u64 {
 
 pub fn ahash_par(x: EntryList) -> u64 {
     // Same as above, but parallel
-    let sorted_hashes = x
+    let mut hashes = x
         .into_par_iter()
         .map(|e| {
             let mut hasher = AHasher::default();
             hasher.write(&e[..]);
             hasher.finish()
         })
-        .collect::<BTreeSet<_>>();
+        .collect::<Vec<_>>();
+    hashes.par_sort_unstable();
 
     // ...however, the final hashing must be sequential, and that's sad
-    sorted_hashes
+    hashes
         .into_iter()
         .fold(AHasher::default(), |mut hasher, elem| {
             hasher.write_u64(elem);
@@ -71,44 +72,53 @@ pub fn ahash_par(x: EntryList) -> u64 {
 
 // If we know that we want to compare for equality, we can do it...
 pub fn eq_by_ahash_seq(x: EntryList, y: EntryList) -> bool {
-    let make_hash_set = |list: EntryList| {
-        list.into_iter()
+    let sorted_hashes = |list: EntryList| {
+        let mut hashes = list
+            .into_iter()
             .map(|e| {
                 let mut hasher = AHasher::default();
                 hasher.write(&e[..]);
                 hasher.finish()
             })
-            .collect::<HashSet<_>>()
+            .collect::<Vec<_>>();
+        hashes.sort_unstable();
+        hashes
     };
-    make_hash_set(x) == make_hash_set(y)
+    sorted_hashes(x) == sorted_hashes(y)
 }
 
 // ...and then there is no hashing at the end, only a comparison, which is still
 // sequential but that's reasonable since it's memory bound anyway.
 pub fn eq_by_ahash_par(x: EntryList, y: EntryList) -> bool {
-    let make_hash_set = |list: EntryList| {
-        list.into_par_iter()
+    let sorted_hashes = |list: EntryList| {
+        let mut hashes = list
+            .into_par_iter()
             .map(|e| {
                 let mut hasher = AHasher::default();
                 hasher.write(&e[..]);
                 hasher.finish()
             })
-            .collect::<HashSet<_>>()
+            .collect::<Vec<_>>();
+        hashes.par_sort_unstable();
+        hashes
     };
-    make_hash_set(x) == make_hash_set(y)
+    sorted_hashes(x) == sorted_hashes(y)
 }
 
 // ===
 
 pub fn sha256_seq(x: EntryList) -> Output<Sha256> {
     // Hash individual entries
-    let sorted_hashes = x
+    let mut hashes = x
         .into_iter()
         .map(|e| Sha256::digest(&e[..]))
-        .collect::<BTreeSet<_>>();
+        .collect::<Vec<_>>();
+
+    // Sort the hashes
+    hashes.sort_unstable();
 
     // Hash the sorted hash list
-    sorted_hashes
+    hashes
         .into_iter()
         .fold(Sha256::new(), |hasher, elem| hasher.chain(elem.as_slice()))
         .finalize()
@@ -116,13 +126,14 @@ pub fn sha256_seq(x: EntryList) -> Output<Sha256> {
 
 pub fn sha256_par(x: EntryList) -> Output<Sha256> {
     // Same as above, but parallel
-    let sorted_hashes = x
+    let mut hashes = x
         .into_par_iter()
         .map(|e| Sha256::digest(&e[..]))
-        .collect::<BTreeSet<_>>();
+        .collect::<Vec<_>>();
+    hashes.par_sort_unstable();
 
     // ...however, the final hashing must be sequential, and that's sad
-    sorted_hashes
+    hashes
         .into_iter()
         .fold(Sha256::new(), |hasher, elem| hasher.chain(elem.as_slice()))
         .finalize()
@@ -132,23 +143,29 @@ pub fn sha256_par(x: EntryList) -> Output<Sha256> {
 
 // If we know that we want to compare for equality, we can do it...
 pub fn eq_by_sha256_seq(x: EntryList, y: EntryList) -> bool {
-    let make_hash_set = |list: EntryList| {
-        list.into_iter()
+    let sorted_hashes = |list: EntryList| {
+        let mut hashes = list
+            .into_iter()
             .map(|e| Sha256::digest(&e[..]))
-            .collect::<HashSet<_>>()
+            .collect::<Vec<_>>();
+        hashes.sort_unstable();
+        hashes
     };
-    make_hash_set(x) == make_hash_set(y)
+    sorted_hashes(x) == sorted_hashes(y)
 }
 
 // ...and then there is no hashing at the end, only a comparison, which is still
 // sequential but that's reasonable since it's memory bound anyway.
 pub fn eq_by_sha256_par(x: EntryList, y: EntryList) -> bool {
-    let make_hash_set = |list: EntryList| {
-        list.into_par_iter()
+    let sorted_hashes = |list: EntryList| {
+        let mut hashes = list
+            .into_par_iter()
             .map(|e| Sha256::digest(&e[..]))
-            .collect::<HashSet<_>>()
+            .collect::<Vec<_>>();
+        hashes.sort_unstable();
+        hashes
     };
-    make_hash_set(x) == make_hash_set(y)
+    sorted_hashes(x) == sorted_hashes(y)
 }
 
 // ===
